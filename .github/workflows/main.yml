@@ -1,0 +1,64 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches:
+      - main  # Trigger on pushes to the main branch
+  pull_request:
+    branches:
+      - main  # Trigger on pull requests to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'  # Specify the PHP version your WordPress site requires
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+      - name: Install Node.js and npm
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'  # Specify the Node.js version your project requires
+
+      - name: Install npm packages
+        run: npm install --production  # Install production-only npm packages
+
+      - name: Build assets (if applicable)
+        run: npm run build  # Adjust to your build script if you have one
+
+      - name: Archive production build
+        id: package
+        run: |
+          mkdir -p build
+          zip -r build/archive.zip .
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'your-app-service-name'  # Replace with your Azure App Service name
+          slot-name: 'production'  # Replace with your deployment slot if using one
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: build/archive.zip
+
+      - name: Post-deployment tasks
+        run: |
+          curl https://your-wordpress-site.com/wp-admin/admin-ajax.php?action=deploy_post_action
+          # Add any other necessary post-deployment actions here
+
+      - name: Run smoke tests
+        run: |
+          # Example: Run simple tests to verify deployment
+          curl -sSf https://your-wordpress-site.com/ || exit 1
+
+      - name: Cleanup
+        run: |
+          rm -rf build  # Clean up the build directory after deployment
